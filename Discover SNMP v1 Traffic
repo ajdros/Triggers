@@ -1,0 +1,29 @@
+// Check if the protocol version is SNMP v1
+if (SNMP.version === 'v1' || SNMP.version === '1') {
+    
+    const clientIP = Flow.client.ipaddr.toString();
+    const serverIP = Flow.server.ipaddr.toString();
+    const community = SNMP.community || 'N/A';
+    
+    // Increment metrics for dashboard tracking
+    Network.metricAddCount('snmp_v1_count', 1);
+    Network.metricAddDetailCount('snmp_v1_clients', clientIP, 1);
+    Network.metricAddDetailCount('snmp_v1_servers', serverIP, 1);
+    Network.metricAddDetailCount('snmp_v1_communities', community, 1);
+    
+    // Generate an ExtraHop Detection
+    commitDetection('snmp_v1_detected', {
+        title: 'SNMP v1 Protocol Usage Detected',
+        description: `Unencrypted SNMP v1 traffic detected from client ${clientIP} to server ${serverIP} using community string '${community}'.`,
+        categories: ['sec.caution'],
+        participants: [
+            { role: 'offender', object: Flow.client.device },
+            { role: 'victim', object: Flow.server.device }
+        ],
+        identityKey: `${clientIP}-${serverIP}`,
+        riskScore: 30
+    });
+    
+    // Debug logging
+    debug(`[SNMP v1 Detected] Client: ${clientIP} -> Server: ${serverIP} | Community: ${community}`);
+}
