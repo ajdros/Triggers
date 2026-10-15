@@ -1,0 +1,58 @@
+/*****************************
+ * User Configurable Options *
+ *****************************/
+
+// Detection Configuration Information
+const detectionTitle = 'New Subnet Device Found';
+const detectionType = 'new_subnet_device';
+const detectionRiskScore = 30;
+
+// Define subnets to match new IPs against here
+const TARGET_SUBNETS = [
+    new IPAddress("10.11.10.0"),
+    new IPAddress("10.10.0.0")
+];
+
+// Subnet mask for subnets defined in TARGET_SUBNETS
+const CIDR_MASK = 16;
+
+/****************
+ * Trigger Code *
+ ****************/
+
+debug("Found new device: ");
+debug(Discover.device.hwaddr + " | " + Discover.device.ipaddrs + " | " + Discover.device.id);
+
+if(Discover.device.ipaddrs.length > 0){
+    const newDevice = new Device(Discover.device.id);
+    const deviceIp = newDevice.ipaddrs[0];
+    
+    const isMatchedSubnet = TARGET_SUBNETS.some(target => {
+        debug("Checking to see if IP " + deviceIp.mask(CIDR_MASK) + " matches with subnet: " +target.toString());
+        return deviceIp.mask(CIDR_MASK).equals(target);
+    });
+    
+    if(isMatchedSubnet){
+        debug("Found a new IP within subnet list");
+        // Custom App metric
+        Application("New Subnet Device").metricAddDistinct("new_subnet_devices", deviceIp);
+
+        // Create custom detection
+        commitDetection(detectionType, {
+            title: detectionTitle,
+            categories: ['sec.caution'],
+            riskScore: detectionRiskScore, 
+            description: 
+                "A tracking trigger identified a brand new device active within the monitored subnet." + "\n" +
+                "**Device Details:**" + "\n" + 
+                "- **IP Address:** " + deviceIp + "\n" + 
+                "- **MAC Address:** " + (newDevice.hwaddr ? newDevice.hwaddr : "Unknown") + "\n", 
+            
+            // Consolidate ongoing detections for the same IP within the expiration window
+            identityKey: [deviceIp, 'new_device'].join('!!'),
+            identityTtl: 'day'
+        });
+        
+        debug("New detection created");
+    }
+}
