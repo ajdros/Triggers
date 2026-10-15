@@ -1,0 +1,79 @@
+// --- Configuration ---
+const INACTIVITY_THRESHOLD_SEC = 300; // 5 minutes inactivity
+const THRESHOLD_MS = INACTIVITY_THRESHOLD_SEC * 1000;
+
+// Track active devices during network traffic events
+if (event === 'FLOW_CLASSIFY') {
+    const now = getTimestamp();
+    
+    // Evaluate both client and server endpoints in the flow
+    const flowDevices = [Flow.client.device, Flow.server.device];
+    
+    for (let i = 0; i < flowDevices.length; i++) {
+        const dev = flowDevices[i];
+        if (!dev || !dev.id) continue;
+        
+        const devId = dev.id;
+        const deviceKey = 'last_seen_' + devId;
+        const alertKey = 'alerted_' + devId;
+        
+        // Update last seen timestamp
+        Session.add(deviceKey, now);
+        
+        // Register device ID in tracking list for timer evaluation
+        let tracked = Session.lookup('monitored_device_ids') || [];
+        if (tracked.indexOf(devId) === -1) {
+            tracked.push(devId);
+            Session.add('monitored_device_ids', tracked);
+        }
+        
+        // Clear alert flag when network traffic resumes
+        if (Session.lookup(alertKey)) {
+            Session.remove(alertKey);
+        }
+    }
+}
+
+// Periodically check inactivity status
+if (event === 'TIMER_30SEC') {
+    const tracked = Session.lookup('monitored_device_ids') || [];
+    const now = getTimestamp();
+    
+    for (let i = 0; i < tracked.length; i++) {
+        const devId = tracked[i];
+        const deviceKey = 'last_seen_' + devId;
+        const alertKey = 'alerted_' + devId;
+        
+        const lastSeen = Session.lookup(deviceKey);
+        const hasAlerted = Session.lookup(alertKey);
+        
+        if (lastSeen && !hasAlerted) {
+            const silentDuration = now - lastSeen;
+            
+            if (silentDuration >= THRESHOLD_MS) {
+                // Re-instantiate the Device object from its ID for the detection participant
+                const targetDevice = new Device(devId);
+                
+                // Safely resolve primary IP and hostname metadata
+                const primaryIp = (targetDevice.ipaddrs && targetDevice.ipaddrs.length > 0) ? targetDevice.ipaddrs[0].toString() : null;
+                const primaryDns = (targetDevice.dnsNames && targetDevice.dnsNames.length > 0) ? targetDevice.dnsNames[0] : null;
+                const deviceLabel = primaryDns || targetDevice.dhcpName || targetDevice.netbiosName || primaryIp || devId;
+                
+                commitDetection('device_offline_detection', {
+                    title: 'Monitored Device Inactive',
+                    description: 'Device ' + deviceLabel + 
+                                 ' has generated no traffic for over ' + INACTIVITY_THRESHOLD_SEC + ' seconds.',
+                    categories: ['sec.caution'],
+                    riskScore: 60,
+                    identityKey: 'device_offline_' + devId,
+                    participants: [
+                        { object: targetDevice, role: 'victim' }
+                    ]
+                });
+                
+                // Set alert state to avoid duplicate detections
+                Session.add(alertKey, true);
+            }
+        }
+    }
+}
