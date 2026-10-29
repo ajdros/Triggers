@@ -1,0 +1,40 @@
+// handle client and server
+const client = Flow.client.ipaddr;
+const server = Flow.server.ipaddr;
+
+
+if(SSL.host === null) { return; }
+
+
+//look for the SNI/host of interest
+//use regex or string "" as needed
+if(SSL.host.match(/google/)) {
+//output the value of the host name to verify we found what we are looking for
+debug(SSL.host);
+  
+ //generate the detection
+     //Sets the detection type
+ commitDetection('training_custom_detection', {
+     //user defined title
+     title: 'Training Custom Detection-SSL Test',
+    //description of the detection
+     description: `Device ${client} established SSL Session to ${server}`,
+     riskScore: 5,
+     //endpoints associated with the detection
+     participants: [{
+          //who is offender
+          object: client,
+              role: 'offender'
+              },
+          //who is victim
+          {object: server,
+              role: 'victim'
+          }],
+     //Unique identifier to track if detection behavior is ongoing     
+      identityKey: [client, server].join('!!'),
+     //amount of time after generation before multiple are combined
+      identityTtl: 'hour'
+      });
+      //verify detection is created
+      debug("Detection committed");
+  }
