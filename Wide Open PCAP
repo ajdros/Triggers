@@ -1,0 +1,9 @@
+//Use this as part of troubleshooting a device 
+//Enable it as needed and disable once you have the packets you need. 
+
+var pcapName = 'OnDemand_Wide_Open ' + Flow.client.ipaddr + ' TO -> ' + Flow.server.ipaddr;
+
+// Don't touch the values below.
+var opts = { maxPackets: 2000 };
+    Flow.captureStart(pcapName, opts);
+    debug('Start PCAP: ' + pcapName);
