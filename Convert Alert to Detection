@@ -1,0 +1,92 @@
+if (event === 'ALERT_RECORD_COMMIT') {
+    // Check if the event being processed is an 'ALERT_RECORD_COMMIT' event.
+
+    const send_all_alerts = false; // Set to true to ignore send_specified_alerts & make all alerts into detections.
+    // This flag determines whether to convert all alerts into detections, regardless of specific alert names.
+
+    const send_specified_alerts = ['Training Threshold']; // List the full name of the alert in this array of strings.
+    // This array contains the names of specific alerts that should be converted into detections.
+
+    let alert = AlertRecord;
+    // Assign the AlertRecord object to the 'alert' variable for easier access.
+
+    if (send_specified_alerts.includes(alert.name) || send_all_alerts) {
+        // Check if the current alert's name is in the 'send_specified_alerts' array or if 'send_all_alerts' is true.
+        // If either condition is met, the alert will be converted into a detection.
+
+        let victim;
+        // Declare a variable 'victim' to store the object or IP address associated with the alert.
+
+        if (alert.object instanceof Application || Device) {
+            victim = alert.object;
+            // If the alert's object is an instance of Application or Device, assign it to 'victim'.
+        } else {
+            victim = System.ipaddr;
+            // Otherwise, assign the system's IP address to 'victim'.
+        }
+
+        let alertsev = alert.severityLevel;
+        // Assign the alert's severity level to the 'alertsev' variable.
+
+        debug(alertsev.toString());
+        // Log the severity level to the debug console.
+
+        if (alertsev != null) {
+            // Check if the severity level is not null.
+            switch (alertsev) {
+                // Map the alert's severity level to a risk score for the detection.
+                case 0:
+                    alertsev = 89;
+                    break;
+                case 1:
+                    alertsev = 79;
+                    break;
+                case 2:
+                    alertsev = 69;
+                    break;
+                case 3:
+                    alertsev = 59;
+                    break;
+                case 4:
+                    alertsev = 49;
+                    break;
+                case 5:
+                    alertsev = 11;
+                    break;
+                case 6:
+                case 7:
+                    alertsev = 1;
+                    break;
+                default:
+                    alertsev = 33;
+            }
+        }
+
+        let detectionType = alert.name.replace(/ /g, '_'); // Detection type must start with a letter, then only contain letters, numbers and/or underscores.
+        // Replace spaces in the alert name with underscores to create a valid detection type.
+
+        detectionType = detectionType.replace(/-/g, '_');
+        // Replace hyphens in detection type with underscores.
+
+        commitDetection(detectionType, {
+            // Call the 'commitDetection' function to create a new detection.
+            'title': alert.name,
+            // Set the detection's title to the alert's name.
+            'description': alert.description,
+            // Set the detection's description to the alert's description.
+            'riskScore': alertsev,
+            // Set the detection's risk score to the mapped severity level.
+            'categories': ['sec', 'sec.caution'],
+            // Set the detection's categories to 'sec' and 'sec.caution'.
+            'participants': [
+                {
+                    'object': victim,
+                    'role': 'victim'
+                }
+            ],
+            // Add the victim as a participant in the detection.
+            'identityKey': alert.id
+            // Set the detection's identity key to the alert's ID.
+        });
+    }
+}
