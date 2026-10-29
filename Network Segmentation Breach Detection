@@ -1,0 +1,39 @@
+// Define constants for the client (initiating) and server (receiving) IP addresses
+// These IP addresses are extracted from a network "Flow" object, which represents a communication session.
+const client = Flow.client.ipaddr; 
+const server = Flow.server.ipaddr; 
+
+// Start the conditional block. The detection logic is executed only if both conditions are met.
+if (client.toString().match(/^192\.168\.179/) && server.toString().match(/^192\.168\.164/))
+{
+     // Condition 1: Check if the client's IP address starts with "10.10.11"
+     // (e.g., a device in the training/less-privileged network segment).
+     // Condition 2: Check if the server's IP address starts with "10.10.6"
+     // (e.g., a device in the privileged/sensitive network segment).
+     
+     // If the conditions are met (a device from 10.10.11 accesses 10.10.6), 
+     // commit a security detection/alert to the monitoring system.
+     commitDetection('network_segmentation_breach_training', {
+         // The unique ID for this specific type of detection.
+         title: 'Network Segmentation Breach (TRAINING)',
+         // The human-readable title for the alert.
+         description: `Device ${client} accessed privileged device ${server} over ${Flow.l7proto}`, 
+         // A detailed message describing the violation, including the Layer 7 protocol used (e.g., HTTP, SSH).
+        categories: ['sec.caution'], 
+        // Assign categories/tags for filtering (security caution).
+        riskScore: 1,
+        // Assign a low risk score, often used for training or low-impact alerts.
+         participants: [{
+             object: client, 
+            role: 'offender'}, 
+            {
+             object: server, 
+            role: 'victim'}], 
+        // Define the roles of the communicating devices for clarity in the alert interface.
+        identityKey: [client, server].join('!!'),     
+        // Create a unique key based on the client and server IPs to prevent duplicate alerts for the same flow.
+        }); 
+        
+        // Output a debug message to the console/log confirming the detection was recorded.
+        debug("committed");
+        }
