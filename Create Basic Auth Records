@@ -1,0 +1,120 @@
+const sendRecords = false; // Flag to control sending extracted authentication records to an external system (EXA).
+const savePackets = false; // Flag to control capturing and sending network packets to another system (ETA) using Precision PCAP.
+
+// -------------------------------
+if (event == "HTTP_REQUEST") { // Execute this block when an HTTP request is received.
+  var headers = HTTP.headers; // Get all HTTP headers from the request.
+  var h = headers["Authorization"]; // Extract the Authorization header.
+
+  if (h) { // Check if the Authorization header exists.
+    if (h.match(/^Basic /)) { // Check if the header indicates Basic Authentication.
+      debug("got one: " + h); // Log the Authorization header for debugging.
+
+      // Get the base64-encoded username:password payload.
+      var payload = h.match(/^Basic ([^ ]+)/);
+
+      if (payload) { // If the payload was successfully extracted.
+        // Real Basic Authentication detected.
+
+        // HTTP.record is not available during HTTP_REQUEST, so we build a record manually.
+        let record = {};
+        record.client = Flow.client.device; // Client device name.
+        record.clientAddr = Flow.client.ipaddr; // Client IP address.
+        record.clientPort = Flow.client.port; // Client port.
+        record.server = Flow.server.device; // Server device name.
+        record.serverAddr = Flow.server.ipaddr; // Server IP address.
+        record.serverPort = Flow.server.port; // Server port.
+        record.contentType = HTTP.contentType; // Content type of the request.
+        record.method = HTTP.method; // HTTP method (GET, POST, etc.).
+        record.uri = HTTP.uri; // Requested URI.
+        record.userAgent = HTTP.userAgent; // User-Agent header.
+        record.origin = HTTP.origin; // Origin header.
+        record.query = HTTP.query; // Query string.
+        record.referer = HTTP.referer; // Referer header.
+        record.reqSize = HTTP.reqSize; // Request size.
+        record.title = HTTP.title; // Title of the requested page (if available).
+        record.vlan = Flow.vlan; // VLAN identifier.
+
+        // Increment a counter to track the number of Basic Authentication attempts.
+        Network.metricAddCount("basicAuth", 1);
+
+        // Extract the base64-encoded username:password string.
+        var userpass = payload[1];
+
+        // Store the raw base64-encoded header in a detail counter.
+        Network.metricAddDetailCount("basicAuth_raw", userpass, 1);
+        record.raw = userpass; // Store the raw base64 string in the record.
+
+        // Store the client IP address in a detail counter.
+        Network.metricAddDetailCount("basicAuth_client", Flow.client.ipaddr, 1);
+
+        // Store the server IP address in a detail counter.
+        Network.metricAddDetailCount("basicAuth_server", Flow.server.ipaddr, 1);
+
+        // Decode the base64-encoded username:password string.
+        var up = b64decode(userpass);
+
+        // Extract the username from the decoded string.
+        var match = up.match(/^(.+?):.+$/); // Split username and password.
+
+        if (match) { // If username was successfully extracted.
+          var username = match[1]; // Get the username.
+
+          if (username) { // If a username exists.
+            // Store the username in a detail counter.
+            Network.metricAddDetailCount("basicAuth_username", username, 1);
+            record.username = username; // Store the username in the record.
+          }
+        }
+
+        if (sendRecords) { // If sendRecords is enabled.
+          commitRecord("basic_auth", record); // Send the record to the external system.
+        }
+
+        if (savePackets) { // If savePackets is enabled.
+          // Capture network packets associated with the request.
+          Flow.captureStart("basic_auth", { maxPackets: 50, maxPacketsLookback: 40 });
+        }
+      }
+    } else {
+      // debug("skipping: " + h); // Log skipped headers for debugging.
+      return; // Skip processing if not Basic Authentication.
+    }
+  }
+}
+
+// Function to decode a base64-encoded string.
+function b64decode(encodedStr) {
+  var Base64 = {
+    _keyStr: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=",
+    decode: function (e) {
+      var t = "";
+      var n, r, i;
+      var s, o, u, a;
+      var f = 0;
+      e = e.replace(/[^A-Za-z0-9\+\/\=]/g, ""); // Remove invalid characters.
+      while (f < e.length) {
+        s = this._keyStr.indexOf(e.charAt(f++)); // Get the index of the current character.
+        o = this._keyStr.indexOf(e.charAt(f++));
+        u = this._keyStr.indexOf(e.charAt(f++));
+        a = this._keyStr.indexOf(e.charAt(f++));
+        n = s << 2 | o >> 4; // Combine the 6-bit values.
+        r = (o & 15) << 4 | u >> 2;
+        i = (u & 3) << 6 | a;
+        t = t + String.fromCharCode(n); // Convert to character.
+        if (u != 64) {
+          t = t + String.fromCharCode(r);
+        }
+        if (a != 64) {
+          t = t + String.fromCharCode(i);
+        }
+      }
+      return t; // Return the decoded string.
+    },
+  };
+
+  var decoded = Base64.decode(encodedStr); // Decode the input string.
+  return decoded; // Return the decoded string.
+}
+
+
