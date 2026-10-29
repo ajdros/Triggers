@@ -1,0 +1,13 @@
+
+// New custom metrics are created when trigger sees an HTTP status code of 404
+if (HTTP.statusCode === 404) {
+
+    // Define a custom count metric named 404_errors_count that counts up in increments of 1, that is available to Devices
+    Device.metricAddCount("404_errors_count", 1);
+
+    // Define a custom Detail metric. This overloaded key metric combines 3 Class properties into a single metric
+    var Detail = " URI: " + HTTP.uri + " | Server: " + Flow.server + " | Referrer: " + HTTP.referer;
+    Device.metricAddDetailCount("404_error_details", Detail, 1);
+}
+
+
